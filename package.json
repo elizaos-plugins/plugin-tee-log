@@ -19,5 +19,28 @@
         "build": "tsup --format esm --dts",
         "dev": "tsup --format esm --dts --watch",
         "lint": "eslint --fix  --cache ."
+    },
+    "agentConfig": {
+        "pluginType": "elizaos:client:1.0.0",
+        "pluginParameters": {
+            "ENABLE_TEE_LOG": {
+                "type": "boolean",
+                "description": "Enable/disable TEE logging functionality"
+            },
+            "SGX": {
+                "type": "boolean",
+                "description": "Enable/disable SGX mode"
+            },
+            "TEE_MODE": {
+                "type": "string",
+                "enum": ["sgx", "nitro", "disabled"],
+                "description": "Trusted Execution Environment mode"
+            },
+            "WALLET_SECRET_SALT": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Salt for wallet secret generation"
+            }
+        }
     }
 }
