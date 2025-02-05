@@ -1,6 +1,6 @@
 // src/services/teeLogService.ts
 import { Service, ServiceType } from "@elizaos/core";
-import { TEEMode as TEEMode2 } from "@elizaos/plugin-tee";
+import { TEEMode } from "@elizaos/plugin-tee";
 
 // src/types.ts
 var TeeType = /* @__PURE__ */ ((TeeType2) => {
@@ -169,26 +169,31 @@ function rng() {
   return rnds8Pool.slice(poolPtr, poolPtr += 16);
 }
 
+// ../../node_modules/uuid/dist/esm-node/regex.js
+var regex_default = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000)$/i;
+
+// ../../node_modules/uuid/dist/esm-node/validate.js
+function validate(uuid) {
+  return typeof uuid === "string" && regex_default.test(uuid);
+}
+var validate_default = validate;
+
 // ../../node_modules/uuid/dist/esm-node/stringify.js
 var byteToHex = [];
 for (let i = 0; i < 256; ++i) {
-  byteToHex.push((i + 256).toString(16).slice(1));
+  byteToHex.push((i + 256).toString(16).substr(1));
 }
-function unsafeStringify(arr, offset = 0) {
-  return byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + "-" + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + "-" + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + "-" + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + "-" + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]];
+function stringify(arr, offset = 0) {
+  const uuid = (byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + "-" + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + "-" + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + "-" + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + "-" + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]]).toLowerCase();
+  if (!validate_default(uuid)) {
+    throw TypeError("Stringified UUID is invalid");
+  }
+  return uuid;
 }
-
-// ../../node_modules/uuid/dist/esm-node/native.js
-import crypto2 from "crypto";
-var native_default = {
-  randomUUID: crypto2.randomUUID
-};
+var stringify_default = stringify;
 
 // ../../node_modules/uuid/dist/esm-node/v4.js
 function v4(options, buf, offset) {
-  if (native_default.randomUUID && !buf && !options) {
-    return native_default.randomUUID();
-  }
   options = options || {};
   const rnds = options.random || (options.rng || rng)();
   rnds[6] = rnds[6] & 15 | 64;
@@ -200,7 +205,7 @@ function v4(options, buf, offset) {
     }
     return buf;
   }
-  return unsafeStringify(rnds);
+  return stringify_default(rnds);
 }
 var v4_default = v4;
 
@@ -277,7 +282,7 @@ var TeeLogManager = class {
       const sgxAttestation = await sgxAttestationProvider.generateAttestation(userReport);
       return JSON.stringify(sgxAttestation);
     } else if (this.teeType === "tdx_dstack" /* TDX_DSTACK */) {
-      const tdxAttestationProvider = new TdxAttestationProvider();
+      const tdxAttestationProvider = new TdxAttestationProvider(this.teeMode);
       const tdxAttestation = await tdxAttestationProvider.generateAttestation(userReport);
       return JSON.stringify(tdxAttestation);
     } else {
@@ -288,12 +293,13 @@ var TeeLogManager = class {
 
 // src/services/teeLogService.ts
 import Database from "better-sqlite3";
+import path from "path";
 var TeeLogService = class extends Service {
-  dbPath = "./data/tee_log.sqlite";
+  dbPath;
   initialized = false;
   enableTeeLog = false;
   teeType;
-  teeMode = TEEMode2.OFF;
+  teeMode = TEEMode.OFF;
   // Only used for plugin-tee with TDX dstack
   teeLogDAO;
   teeLogManager;
@@ -320,8 +326,9 @@ var TeeLogService = class extends Service {
     const runInSgx = runtime.getSetting("SGX");
     const teeMode = runtime.getSetting("TEE_MODE");
     const walletSecretSalt = runtime.getSetting("WALLET_SECRET_SALT");
+    this.teeMode = teeMode ? TEEMode[teeMode] : TEEMode.OFF;
     const useSgxGramine = runInSgx && enableValues.includes(runInSgx.toLowerCase());
-    const useTdxDstack = !teeMode && teeMode !== TEEMode2.OFF && walletSecretSalt;
+    const useTdxDstack = teeMode && teeMode !== TEEMode.OFF && walletSecretSalt;
     if (useSgxGramine && useTdxDstack) {
       throw new Error("Cannot configure both SGX and TDX at the same time.");
     } else if (useSgxGramine) {
@@ -331,6 +338,8 @@ var TeeLogService = class extends Service {
     } else {
       throw new Error("Invalid TEE configuration.");
     }
+    const dbPathSetting = runtime.getSetting("TEE_LOG_DB_PATH");
+    this.dbPath = dbPathSetting || path.resolve("data/tee_log.sqlite");
     const db = new Database(this.dbPath);
     this.teeLogDAO = new SqliteTeeLogDAO(db);
     await this.teeLogDAO.initialize();

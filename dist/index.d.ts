@@ -50,7 +50,7 @@ declare abstract class TeeLogDAO<DB = any> {
 }
 
 declare class TeeLogService extends Service implements ITeeLogService {
-    private readonly dbPath;
+    private dbPath;
     private initialized;
     private enableTeeLog;
     private teeType;
